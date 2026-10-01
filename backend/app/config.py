@@ -7,7 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Reads the repo-root .env when run from backend/, or a backend/.env. Real environment
+    # variables always win over either file (Docker Compose relies on that).
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), env_file_encoding="utf-8", extra="ignore")
 
     # mysql://user:password@host:3306/dbname   or   sqlite:///./dev.db
     database_url: str = "mysql://inventory:inventory@127.0.0.1:3306/inventory"

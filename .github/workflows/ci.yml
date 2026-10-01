@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-sqlite:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  backend-mysql:
+    # The same suite against real MySQL 8, which exercises SELECT ... FOR UPDATE row locks,
+    # CHECK constraints, generated columns and the append-only triggers.
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: inventory_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval=3s --health-timeout=5s --health-retries=40
+    env:
+      TEST_DATABASE_URL: mysql://root:root@127.0.0.1:3306/inventory_test
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/inventory_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+      - name: Migrations and seed run cleanly on an empty database
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "DROP DATABASE inventory_test; CREATE DATABASE inventory_test;"
+          python -m scripts.migrate
+          python -m scripts.seed
+          python -m scripts.migrate   # second run is a no-op
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run build
