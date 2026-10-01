@@ -68,14 +68,13 @@ def main() -> int:
                 else:
                     target = threshold + rng.randint(0, 150)
 
+                # Build history: open with more than needed, then ship / adjust down to the target.
+                received = target + rng.randint(5, 60)
                 item = service.create_item(ItemCreate(
                     sku=f"{prefix}-{index:03d}", name=name, unit=unit, reorder_threshold=threshold,
                     description=f"{name} stocked in aisle {rng.randint(1, 12)}.",
+                    initial_stock=received, created_by=people[0],
                 ))
-                # Build history: receive more than needed, then ship / adjust down to the target.
-                received = target + rng.randint(5, 60)
-                service.record_transaction(item["id"], TransactionCreate(
-                    type="received", quantity_change=received, created_by=people[0], note="Initial PO"))
                 remaining = received - target
                 while remaining > 0:
                     step = min(remaining, rng.randint(1, 25))
