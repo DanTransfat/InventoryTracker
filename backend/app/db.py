@@ -196,7 +196,7 @@ class Database:
                 charset="utf8mb4",
                 autocommit=True,  # transactions are opened explicitly with BEGIN
                 cursorclass=pymysql.cursors.DictCursor,
-                init_command="SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED, time_zone = '+00:00'",
+                init_command="SET SESSION transaction_isolation = 'READ-COMMITTED', time_zone = '+00:00'",
             )
         conn = sqlite3.connect(
             cfg.sqlite_path,

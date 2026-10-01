@@ -77,6 +77,9 @@ If you bring your own MySQL instead, create the database first:
 CREATE DATABASE inventory CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER 'inventory'@'%' IDENTIFIED BY 'change-me';
 GRANT ALL ON inventory.* TO 'inventory'@'%';
+-- The migration creates triggers. With binary logging on (the MySQL 8 default), a
+-- non-SUPER user needs this, or run the migration as root:
+SET GLOBAL log_bin_trust_function_creators = 1;
 ```
 
 ### Tests

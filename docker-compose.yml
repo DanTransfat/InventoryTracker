@@ -5,6 +5,9 @@ services:
   mysql:
     image: mysql:8.0
     restart: unless-stopped
+    # Lets the non-root app user create the ledger's append-only triggers while binary
+    # logging is on (MySQL 8 default). Without it, CREATE TRIGGER needs SUPER (error 1419).
+    command: ["--log-bin-trust-function-creators=1"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-inventory}
