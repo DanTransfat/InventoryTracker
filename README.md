@@ -48,6 +48,11 @@ directly at http://localhost:8000/api.
 
 Reset everything: `docker compose down -v` (the `-v` deletes the MySQL volume).
 
+### Deploy to a server
+
+One command on a fresh Ubuntu VM sets up Docker, HTTPS and the app. See
+**[deploy/README.md](deploy/README.md)**.
+
 ### Option B — run the pieces yourself
 
 Requires Python 3.10+, Node 20+, and a MySQL 8 server.
@@ -309,6 +314,7 @@ curl -s -X POST localhost:8000/api/items/1/transactions \
 | Goal | State |
 |---|---|
 | Containerized setup | **Done.** `docker compose up --build` starts MySQL, API and web. |
+| Deployment | **Done.** One-command HTTPS setup on a single server ([deploy/README.md](deploy/README.md)), smoke-tested in CI. |
 | Idempotent transaction creation | **Done.** `Idempotency-Key` header; same key + same body replays the original (200), same key + different body is 409. Checked under the item lock and backed by a unique index. |
 | Stock history chart | **Done.** SVG step chart on the item page, from `balance_after`, with the threshold line. |
 | Alert notifications | **Done (basic).** `AlertNotifier` interface with a log implementation (default) and a webhook implementation (`ALERT_NOTIFIER=webhook`). Sent after commit. |
@@ -319,11 +325,8 @@ curl -s -X POST localhost:8000/api/items/1/transactions \
 
 ## 9. Known gaps and what I'd do next
 
-- **Deployment.** Not included in the repo. The Compose file runs as-is on any single VM
-  (e.g. a small cloud instance): copy `.env`, set strong passwords, `docker compose up -d --build`,
-  and put a TLS proxy in front. On a PaaS (Render, Railway, Fly.io), deploy `backend/` and
-  `frontend/` as two services plus a managed MySQL 8, set `DATABASE_URL`, and point nginx's
-  `proxy_pass` (or `VITE_API_BASE_URL` + `CORS_ORIGINS`) at the API.
+- **Single-server deployment only.** One VM is a single point of failure. A larger setup
+  would use managed MySQL with automated backups and run the API on two or more instances.
 - **Notifications can be lost** if the process dies between commit and send. The durable fix
   is a transactional outbox: write a `notifications` row in the same transaction, deliver it
   from a background worker.

@@ -56,3 +56,39 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm run build
+
+  deploy-smoke:
+    # Boots the exact production stack a server runs (MySQL + API + nginx + Caddy) and
+    # checks it end to end through Caddy on port 80. HTTPS is skipped (SITE_ADDRESS=:80)
+    # because a CI runner has no public hostname for Let's Encrypt to verify.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the production stack
+        run: |
+          printf 'MYSQL_ROOT_PASSWORD=ci-root\nMYSQL_PASSWORD=ci-pass\nSITE_ADDRESS=:80\n' > .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --wait
+      - name: Check the app through the public entry point
+        run: |
+          get() { curl -fsS --retry 30 --retry-delay 2 --retry-all-errors "http://localhost$1"; }
+          get /api/health
+          get / | grep -q '<div id="root">'                   # SPA shell
+          get /items/1 | grep -q '<div id="root">'            # deep link falls back to the SPA
+          get '/api/items?page_size=1' | python3 -c 'import json,sys; t=json.load(sys.stdin)["total"]; assert t == 60, t; print("items:", t)'
+          get /api/alerts/summary
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost/api/items/1/transactions \
+                 -H 'Content-Type: application/json' -d '{"type":"received","quantity_change":5,"created_by":"ci"}')
+          [ "$code" = 201 ] || { echo "transaction returned $code"; exit 1; }
+          get /api/integrity/ledger | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"], d; print("ledger ok")'
+      - name: MySQL and the API must not be reachable from outside the host
+        run: |
+          ip=$(hostname -I | awk '{print $1}')
+          for port in 3307 8000 8080; do
+            if timeout 3 bash -c "</dev/tcp/$ip/$port" 2>/dev/null; then echo "port $port is exposed on $ip"; exit 1; fi
+          done
+          echo "only Caddy is public"
+      - name: Backup script works
+        run: bash deploy/backup.sh && gunzip -c backups/*.sql.gz | grep -q 'CREATE TABLE `stock_transactions`'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100

@@ -1,6 +1,11 @@
 # One command brings up MySQL 8, the API (with migrations + seed data) and the web app:
 #   cp .env.example .env && docker compose up --build
 # Then open http://localhost:8080
+#
+# Every published port is bound to 127.0.0.1, so it is reachable only from this machine.
+# Docker writes its own firewall rules and skips ufw, so a plain "3307:3306" would expose
+# MySQL to the internet on a server even with ufw on. For a public server, add the HTTPS
+# proxy in docker-compose.prod.yml (see deploy/README.md).
 services:
   mysql:
     image: mysql:8.0
@@ -14,7 +19,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-inventory}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -38,7 +43,7 @@ services:
       ALERT_NOTIFIER: ${ALERT_NOTIFIER:-log}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 5s
@@ -52,7 +57,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
 
 volumes:
   mysql-data:

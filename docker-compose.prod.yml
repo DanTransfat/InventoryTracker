@@ -1,0 +1,42 @@
+# Production add-on for a single public server. Use it together with the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# It adds Caddy as the only thing listening on the public internet (ports 80 and 443).
+# Caddy gets and renews a free HTTPS certificate from Let's Encrypt for SITE_ADDRESS
+# automatically, then forwards every request to the frontend's nginx, which serves the
+# app and passes /api on to Flask. MySQL and Flask stay private (see the base file).
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      # A hostname (e.g. 203-0-113-7.sslip.io or inventory.example.com) turns on HTTPS.
+      # ":80" serves plain HTTP with no certificate (used by the CI smoke test).
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # certificates live here; keep it so restarts don't re-request them
+      - caddy-config:/config
+
+  backend:
+    # Rotate container logs so a long-running test server can't fill its disk.
+    logging: &default-logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  mysql:
+    logging: *default-logging
+
+  frontend:
+    logging: *default-logging
+
+volumes:
+  caddy-data:
+  caddy-config:
