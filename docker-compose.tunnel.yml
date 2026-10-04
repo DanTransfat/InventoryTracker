@@ -1,0 +1,26 @@
+# Tunnel mode: reach the app with NO inbound ports open on the server.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tunnel.yml up -d --build
+#
+# cloudflared opens an outbound connection to Cloudflare and gets a random public
+# https://<words>.trycloudflare.com address (a "quick tunnel": free, no account). Visitors
+# hit Cloudflare, which sends the request back down that connection to nginx. Find the
+# address with:  docker compose logs tunnel | grep trycloudflare
+#
+# Quick tunnels are meant for testing: the address changes every time the tunnel restarts.
+# For a fixed address, create a named tunnel in a free Cloudflare account (needs a domain
+# on Cloudflare) and replace `command` with:  tunnel --no-autoupdate run --token <token>
+services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    command: tunnel --no-autoupdate --url http://frontend:80
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # No public ports: Caddy is not needed in this mode.
+  caddy:
+    profiles: ["https-only"]

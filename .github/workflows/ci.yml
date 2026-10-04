@@ -92,3 +92,35 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100
+
+  deploy-tunnel:
+    # Tunnel mode end to end: no inbound ports, a real Cloudflare quick tunnel, and the
+    # app fetched through its public trycloudflare.com address. Also checks that settings
+    # come from COMPOSE_FILE in .env, the way the setup script writes them.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start in tunnel mode
+        run: |
+          printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.tunnel.yml\nMYSQL_ROOT_PASSWORD=ci-root\nMYSQL_PASSWORD=ci-pass\nSITE_ADDRESS=:80\n' > .env
+          docker compose up -d --build --wait
+      - name: Nothing listens on public ports, and Caddy is not running
+        run: |
+          docker compose ps
+          ! docker compose ps --services --status running | grep -qx caddy
+          ip=$(hostname -I | awk '{print $1}')
+          for port in 80 443 3307 8000 8080; do
+            if timeout 3 bash -c "</dev/tcp/$ip/$port" 2>/dev/null; then echo "port $port is open on $ip"; exit 1; fi
+          done
+      - name: Reach the app through the tunnel
+        run: |
+          for i in $(seq 1 30); do
+            url=$(docker compose logs tunnel | grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
+            [ -n "$url" ] && break; sleep 2
+          done
+          echo "Tunnel: $url"; [ -n "$url" ]
+          curl -fsS --retry 20 --retry-delay 5 --retry-all-errors "$url/api/health"
+          curl -fsS "$url/" | grep -q '<div id="root">'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=100

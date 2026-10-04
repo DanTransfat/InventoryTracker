@@ -50,7 +50,8 @@ Reset everything: `docker compose down -v` (the `-v` deletes the MySQL volume).
 
 ### Deploy to a server
 
-One command on a fresh Ubuntu VM sets up Docker, HTTPS and the app. See
+One command on a Linux server sets up the app, either with HTTPS on ports 80/443 or through a
+Cloudflare Tunnel with no open ports. See
 **[deploy/README.md](deploy/README.md)**.
 
 ### Option B — run the pieces yourself
@@ -314,7 +315,7 @@ curl -s -X POST localhost:8000/api/items/1/transactions \
 | Goal | State |
 |---|---|
 | Containerized setup | **Done.** `docker compose up --build` starts MySQL, API and web. |
-| Deployment | **Done.** One-command HTTPS setup on a single server ([deploy/README.md](deploy/README.md)), smoke-tested in CI. |
+| Deployment | **Done.** One-command setup on a single server, HTTPS or Cloudflare Tunnel ([deploy/README.md](deploy/README.md)), both tested in CI. |
 | Idempotent transaction creation | **Done.** `Idempotency-Key` header; same key + same body replays the original (200), same key + different body is 409. Checked under the item lock and backed by a unique index. |
 | Stock history chart | **Done.** SVG step chart on the item page, from `balance_after`, with the threshold line. |
 | Alert notifications | **Done (basic).** `AlertNotifier` interface with a log implementation (default) and a webhook implementation (`ALERT_NOTIFIER=webhook`). Sent after commit. |
