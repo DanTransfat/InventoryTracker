@@ -21,7 +21,8 @@ services:
       - "443:443"
       - "443:443/udp" # HTTP/3
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # ",z" relabels the file for SELinux (AlmaLinux/Rocky/RHEL); it is ignored elsewhere.
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro,z
       - caddy-data:/data # certificates live here; keep it so restarts don't re-request them
       - caddy-config:/config
 

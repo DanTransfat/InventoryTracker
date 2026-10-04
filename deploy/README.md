@@ -14,16 +14,24 @@ Internet ──443──▶ Caddy (HTTPS) ──▶ nginx (frontend + /api proxy
 
 Any provider works. You need:
 
-- **Ubuntu 24.04 or 22.04** (Debian 12 also works)
+- **Ubuntu 24.04/22.04, Debian 12, AlmaLinux / Rocky Linux / RHEL 8 or 9, or CentOS Stream 9**
+  (check with `cat /etc/os-release`)
 - **1 GB of RAM or more** (2 GB is more comfortable; the script adds swap on smaller servers)
 - **A public IPv4 address**
 - **Inbound ports 22, 80 and 443 open** in the provider's firewall. This is a separate
   setting from the server's own firewall: a "security group" on AWS, a "firewall" on
   DigitalOcean, Hetzner and Google Cloud, or "ingress rules" on Oracle Cloud.
 
-Log in with an SSH key, not a password.
+Log in with an SSH key, not a password. Servers with password login get constant
+automated guessing attempts from bots.
 
 ## 2. Run the setup script
+
+The script needs **root**. Either log in as root, or use an account that can run `sudo`.
+If you see `<user> is not in the sudoers file`, log in as root instead (many providers
+set the root password in their control panel), or give your user sudo rights as root:
+`usermod -aG wheel <user>` on AlmaLinux/Rocky/RHEL, `usermod -aG sudo <user>` on
+Ubuntu/Debian, then log out and back in.
 
 SSH in, then run:
 
@@ -31,11 +39,11 @@ SSH in, then run:
 curl -fsSL https://raw.githubusercontent.com/DanTransfat/InventoryTracker/main/deploy/setup-vm.sh | sudo bash
 ```
 
-It takes 5 to 10 minutes on a small server. It:
+Logged in as root, `| bash` works too. It takes 5 to 10 minutes on a small server. It:
 
 1. installs Docker,
 2. adds swap if the server has under 2 GB of memory,
-3. opens ports 22, 80 and 443 in the server's firewall (ufw),
+3. opens ports 22, 80 and 443 in the server's firewall (ufw or firewalld),
 4. clones the repo into `/opt/inventory-tracker`,
 5. writes `.env` with random passwords (readable only by root),
 6. builds and starts everything, then waits until the app answers.

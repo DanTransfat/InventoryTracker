@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# One-time setup of InventoryTracker on a fresh Ubuntu 22.04/24.04 (or Debian 12) server.
+# One-time setup of InventoryTracker on a fresh Linux server. Supported:
+#   Ubuntu 22.04/24.04, Debian 12, AlmaLinux / Rocky Linux / RHEL 8-9, CentOS Stream 9.
 #
 #   curl -fsSL https://raw.githubusercontent.com/DanTransfat/InventoryTracker/main/deploy/setup-vm.sh | sudo bash
+#
+# Run it as root, or as a user allowed to use sudo. Logged in as root, `| bash` is enough.
 #
 # Optional environment variables (put them after `sudo`, e.g. `sudo DOMAIN=inv.example.com bash`):
 #   DOMAIN    your own hostname whose DNS A record points at this server.
@@ -25,14 +28,35 @@ COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
 say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mError: %s\033[0m\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" -eq 0 ] || die "run this with sudo (it installs Docker and opens firewall ports)."
-command -v apt-get >/dev/null || die "this script expects Ubuntu or Debian."
+[ "$(id -u)" -eq 0 ] || die "this needs root (it installs Docker and opens firewall ports).
+Log in as root and run it again, or use an account that can run sudo."
+
+# Which Linux family is this? /etc/os-release is standard on every supported distro.
+# shellcheck disable=SC1090
+. "${OS_RELEASE_FILE:-/etc/os-release}"
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" debian "*|*" ubuntu "*) family=debian ;;
+  *" rhel "*|*" centos "*|*" fedora "*|*" almalinux "*|*" rocky "*) family=rhel ;;
+  *) die "unsupported Linux (${PRETTY_NAME:-unknown}). Use Ubuntu, Debian, AlmaLinux, Rocky or RHEL." ;;
+esac
+echo "Detected ${PRETTY_NAME:-$ID} ($family family)."
 
 say "1/6 Installing Docker, git and curl"
-apt-get update -qq
-apt-get install -y -qq git curl ca-certificates openssl >/dev/null
-if ! command -v docker >/dev/null; then
-  curl -fsSL https://get.docker.com | sh
+if [ "$family" = debian ]; then
+  apt-get update -qq
+  apt-get install -y -qq git curl ca-certificates openssl >/dev/null
+  if ! command -v docker >/dev/null; then
+    curl -fsSL https://get.docker.com | sh
+  fi
+else
+  dnf install -y -q git curl ca-certificates openssl tar >/dev/null
+  if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
+    # Docker's own packages. Podman (preinstalled on some images) conflicts with them.
+    dnf remove -y -q podman buildah runc >/dev/null 2>&1 || true
+    repo=centos; [ "${ID:-}" = rhel ] && repo=rhel; [ "${ID:-}" = fedora ] && repo=fedora
+    curl -fsSL "https://download.docker.com/linux/$repo/docker-ce.repo" -o /etc/yum.repos.d/docker-ce.repo
+    dnf install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  fi
 fi
 docker compose version >/dev/null || die "Docker Compose plugin is missing."
 systemctl enable --now docker >/dev/null 2>&1 || true
@@ -59,8 +83,13 @@ if command -v ufw >/dev/null; then
   ufw allow 443/udp >/dev/null
   ufw --force enable >/dev/null
   ufw status | sed -n '1,12p'
+elif systemctl is-active --quiet firewalld 2>/dev/null; then
+  firewall-cmd -q --permanent --add-service=ssh --add-service=http --add-service=https
+  firewall-cmd -q --permanent --add-port=443/udp
+  firewall-cmd -q --reload
+  echo "firewalld: $(firewall-cmd --list-services)"
 else
-  echo "ufw not installed; relying on your cloud provider's firewall."
+  echo "No server firewall running; relying on your cloud provider's firewall."
 fi
 
 say "4/6 Getting the code into $APP_DIR"
